@@ -1,0 +1,248 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAX_NAME_LENGTH 50
+#define MAX_ID_LENGTH 20
+#define MAX_PROFILES 500
+
+typedef struct FriendNode 
+{
+    char friend_id[MAX_ID_LENGTH];
+    struct FriendNode *next;
+} FriendNode;
+
+typedef struct Profile 
+{
+    char user_id[MAX_ID_LENGTH];
+    char user_name[MAX_NAME_LENGTH];
+    FriendNode *friend_list;  
+    int friend_count;         
+} Profile;
+
+void addFriendToList(Profile *profile, const char *friend_id) 
+{
+    FriendNode *new_friend = (FriendNode *)malloc(sizeof(FriendNode));
+    if (new_friend == NULL) 
+    {
+        fprintf(stderr, "Memory allocation failed for friend node.\n");
+        return;
+    }
+    strcpy(new_friend->friend_id, friend_id);
+
+    if (profile->friend_list == NULL) 
+    {
+        new_friend->next = new_friend;
+        profile->friend_list = new_friend;
+    }
+    else 
+    {
+        FriendNode *temp = profile->friend_list;
+        while (temp->next != profile->friend_list) 
+        {
+            temp = temp->next;
+        }
+        temp->next = new_friend;
+        new_friend->next = profile->friend_list;
+    }
+}
+
+int loadProfilesFromCSV(const char *filename, Profile profiles[], int *profile_count) 
+{
+    *profile_count = 0;
+
+    FILE *file = fopen(filename, "r");
+    if (!file) 
+    {
+        printf("Could not open file %s\n", filename);
+        return 1;
+    }
+
+    char line[512];
+
+    while (fgets(line, sizeof(line), file)) 
+    {
+        char user_id[MAX_ID_LENGTH], user_name[MAX_NAME_LENGTH], friends_str[512];
+        
+        if (sscanf(line, "%[^,],%[^,],%[^\n]", user_id, user_name, friends_str) == 3)
+        {
+            Profile *profile = &profiles[*profile_count];
+            strcpy(profile->user_id, user_id);
+            strcpy(profile->user_name, user_name);
+            profile->friend_list = NULL;  
+            profile->friend_count = 0; 
+
+            char *token = strtok(friends_str, " ,");
+
+            while (token != NULL) 
+            {
+                addFriendToList(profile, token);  
+                profile->friend_count++;   
+                token = strtok(NULL, " ,");
+            }
+            (*profile_count)++;
+        }
+    }
+    fclose(file);
+    return 0;
+}
+
+void displayProfiles(Profile profiles[], int profile_count) 
+{
+    for (int i = 0; i < profile_count; i++) 
+    {
+        printf("Profile %d:\n", i + 1);
+        printf("User ID: %s\n", profiles[i].user_id);
+        printf("User Name: %s\n", profiles[i].user_name);
+        printf("Friends: ");
+        
+        if (profiles[i].friend_list == NULL) 
+        {
+            printf("No friends listed.\n");
+        }
+        else 
+        {
+            FriendNode *current = profiles[i].friend_list;
+            do 
+            {
+                printf("%s ", current->friend_id);
+                current = current->next;
+            } while (current != profiles[i].friend_list);
+            printf("\n");
+        }
+    }
+}
+
+void displayMostConnectedProfile(Profile profiles[], int profile_count) 
+{
+    Profile *most_connected = NULL;
+    int max_friends = 0;
+
+    for (int i = 0; i < profile_count; i++) 
+    {
+        if (profiles[i].friend_count > max_friends) 
+        {
+            max_friends = profiles[i].friend_count;
+            most_connected = &profiles[i];
+        }
+    }
+
+    if (most_connected) 
+    {
+        printf("Most connected friend is %s with %d friends.\n", most_connected->user_name, max_friends);
+    }
+}
+
+int areProfilesFriends(Profile *profileA, Profile *profileB) 
+{
+    FriendNode *current = profileA->friend_list;
+    if (current == NULL) 
+        return 0;
+    if(strcmp(profileA->user_id,profileB->user_id)==0)
+    {
+        printf("same profiles\n");
+        return 1;
+    }
+    do 
+    {
+        if (strcmp(current->friend_id, profileB->user_id) == 0) 
+            return 1;  
+        current = current->next;
+    } while (current != profileA->friend_list);
+
+    return 0;
+}
+
+void displayNonMutualConnections(Profile profiles[], int profile_count) 
+{
+    for (int i = 0; i < profile_count; i++) 
+    {
+        for (int j = i + 1; j < profile_count; j++) 
+        {
+            if (areProfilesFriends(&profiles[i], &profiles[j])==0 && areProfilesFriends(&profiles[j], &profiles[i])==0) 
+            {
+                printf("%s and %s do not know each other.\n", profiles[i].user_name, profiles[j].user_name);
+            }
+        }
+    }
+}
+
+Profile *getProfileById(Profile profiles[], int profile_count, const char *user_id)
+{
+    for (int i = 0; i < profile_count; i++) 
+    {
+        if (strcmp(profiles[i].user_id, user_id) == 0) 
+        {
+            return &profiles[i];
+        }
+    }
+    return NULL;
+}
+
+int main() 
+{
+    Profile profiles[MAX_PROFILES];
+    int profile_count = 0;
+
+    if (loadProfilesFromCSV("C:\\Users\\DELL\\OneDrive\\Documents\\sample1.csv", profiles, &profile_count) != 0) 
+    {
+        printf("Failed to load profiles.\n");
+        return 1;
+    }
+
+    int choice;
+    int flag= 1;
+    while (flag) 
+    {
+        printf("\nMenu:\n");
+        printf("1. Find Most Connected Friend\n");
+        printf("2. Find People Who Don't Know Each Other\n");
+        printf("3. Check if Person A Knows Person B\n");
+        printf("4. display profiles \n5. Exit\n");
+        printf("Enter your choice: ");
+        scanf("%d", &choice);
+
+        switch (choice) 
+        {
+            case 1:
+                displayMostConnectedProfile(profiles, profile_count);
+                break;
+            case 2:
+                displayNonMutualConnections(profiles, profile_count);
+                break;
+            case 3:
+                {
+                    char user_id1[MAX_ID_LENGTH], user_id2[MAX_ID_LENGTH];
+                    printf("Enter ID of Person A: ");
+                    scanf("%s", user_id1);
+                    printf("Enter ID of Person B: ");
+                    scanf("%s", user_id2);
+
+                    Profile *profileA = getProfileById(profiles, profile_count, user_id1);
+                    Profile *profileB = getProfileById(profiles, profile_count, user_id2);
+
+                    if (profileA && profileB) 
+                    {
+                        if (areProfilesFriends(profileA, profileB)==1) 
+                        {
+                            printf("%s knows %s.\n", profileA->user_name, profileB->user_name);
+                        }
+                        else 
+                        {
+                            printf("%s do not know %s.\n", profileA->user_name, profileB->user_name);
+                        }
+                    }
+                    else 
+                    {
+                        printf("profiles not found.\n");
+                    }
+                    break;
+                }
+            case 4:
+                 displayProfiles(profiles, profile_count); 
+                 break;
+            default:flag=0;
+        }
+    }
+    return 0;
+}
